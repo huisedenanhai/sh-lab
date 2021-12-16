@@ -131,11 +131,32 @@ def conv_zonal(v, z):
     ])
 
 
+def sinc_attenuated(l, w):
+    if l == 0:
+        return 1.0
+    elif l >= w:
+        return 0.0
+
+    x = PI * l / w
+    f = math.sin(x) / x
+
+    # The factor is actually differ from that provided in the paper 'Deringing spherical harmonics', Peter-Pike Sloan.
+    # The attenuation here is slightly stronger, which may result in more blurry result.
+    # But I guess there should be no significant visual difference.
+    # The paper does not tell precisely how the attenuation is calculated, I have to guess.
+    # The paper says he uses sinc^4 but the factor in the table matches with sinc for unattenuated levels.
+    # It might be a waste of time to figure out the exact implmentation used by the author.
+    # Filament also implements this. They use sinc^4 rather than the LUT provided by the paper.
+    # For current attenuation factor, cutoff band 5 already makes cos convolved delta function non-negative.
+    if l == 1:
+        a = 1.0 - min(max(0.0, (11.0 - w) * 0.015), 0.1)
+        f *= a
+    return f
+
+
 def window(v, w):
-    f = PI / w
     scale = np.array([
-        # (math.sin(f * l) / (f * l)) ** 4 if l > 0 else 1
-        [0.8915, 0.8030, 0.5904][l]
+        sinc_attenuated(l, w)
         for l in range(0, 3)
         for _ in range(-l, l + 1)
     ])
@@ -143,7 +164,7 @@ def window(v, w):
     return scale * v
 
 
-def plot_zonal(s, phi_min, phi_max):
+def plot_2d_zonal(ss, phi_min, phi_max):
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
     u = np.linspace(phi_min, phi_max, 100)
@@ -151,17 +172,24 @@ def plot_zonal(s, phi_min, phi_max):
     z = np.cos(u)
     y = np.zeros(u.size)
     b = eval_sh(x, y, z)
-    v = np.tensordot(s, b, axes=([0], [0]))
     ax.grid()
-    ax.plot(u, v)
+    for s in ss:
+        v = np.tensordot(s, b, axes=([0], [0]))
+        ax.plot(u, v)
+
+
+def print_window_weight_table():
+    for l in range(1, 3):
+        ws = [str(sinc_attenuated(l, w))
+              for w in [16.7, 11.3, 10.0, 9.0, 7.0, 5.6]]
+        print(', '.join(ws))
 
 
 if __name__ == '__main__':
-    plot_basis()
-    s = eval_sh(0, 0, 1)
-    print(f'SH delta {s}')
-    plot_sh(s)
-    plot_sh(conv_zonal(s, cos_lob_zonal()))
-    plot_sh(window(s, 2.6))
-    plot_zonal(s, 0.0, PI)
+    # plot_basis()
+    s = eval_sh(0.0, 0, 1)
+    s_conv = conv_zonal(s, cos_lob_zonal())
+    s_conv_windowed = window(s_conv, 5)
+    plot_sh(s_conv_windowed)
+    plot_2d_zonal([s_conv, s_conv_windowed], 0.0, PI)
     plt.show()
