@@ -30,6 +30,18 @@ def sh_l2(x, y, z):
     ])
 
 
+def eval_sh(x, y, z):
+    if hasattr(x, 'shape'):
+        shape = (1, *x.shape)
+    else:
+        shape = 1
+    return np.concatenate((
+        sh_l0() * np.ones(shape),
+        sh_l1(x, y, z),
+        sh_l2(x, y, z),
+    ))
+
+
 def sample_basis(resolution):
     u = np.linspace(0, 2 * np.pi, resolution)
     v = np.linspace(0, np.pi, resolution)
@@ -37,10 +49,7 @@ def sample_basis(resolution):
     y = np.outer(np.sin(u), np.sin(v))
     z = np.outer(np.ones(np.size(u)), np.cos(v))
 
-    l0 = sh_l0() * np.ones((np.size(u), np.size(v)))
-    l1 = sh_l1(x, y, z)
-    l2 = sh_l2(x, y, z)
-    return x, y, z, np.concatenate((np.array((l0, )), l1, l2), axis=0)
+    return x, y, z, eval_sh(x, y, z)
 
 
 def set_up_axis(ax):
@@ -62,7 +71,7 @@ def value_colors(l):
     def mask(v):
         return np.repeat(np.sign(v).reshape((*v.shape, 1)), 4, axis=2)
 
-    return cm.Reds(p) * mask(p) + cm.Blues(n) * mask(n)
+    return cm.Reds(p) * mask(p) + cm.Blues(np.sign(n)) * mask(n)
 
 
 def plot_basis():
@@ -91,11 +100,68 @@ def plot_sh(factor):
     l = np.tensordot(factor, sh, axes=([0], [0]))
     v = np.abs(l)
     col = value_colors(l)
-    ax = plt.axes(projection='3d')
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1, projection='3d')
     ax.plot_surface(x * v, y * v, z * v, facecolors=col)
 
 
+def zonal_to_full(z):
+    f = np.zeros(9)
+    f[0], f[2], f[6] = z
+    return f
+
+
+def cos_lob_zonal():
+    return np.array([
+        SQRT_PI / 2.0,
+        math.sqrt(PI / 3.0),
+        math.sqrt(5.0 * PI / 64.0),
+    ])
+
+
+def cos_lob():
+    return zonal_to_full(cos_lob_zonal())
+
+
+def conv_zonal(v, z):
+    return np.array([
+        v[l * (l + 1) + m] * z[l] * math.sqrt(4.0 * PI / (2.0 * l + 1.0))
+        for l in range(0, 3)
+        for m in range(-l, l + 1)
+    ])
+
+
+def window(v, w):
+    f = PI / w
+    scale = np.array([
+        # (math.sin(f * l) / (f * l)) ** 4 if l > 0 else 1
+        [0.8915, 0.8030, 0.5904][l]
+        for l in range(0, 3)
+        for _ in range(-l, l + 1)
+    ])
+    print(scale)
+    return scale * v
+
+
+def plot_zonal(s, phi_min, phi_max):
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    u = np.linspace(phi_min, phi_max, 100)
+    x = np.sin(u)
+    z = np.cos(u)
+    y = np.zeros(u.size)
+    b = eval_sh(x, y, z)
+    v = np.tensordot(s, b, axes=([0], [0]))
+    ax.grid()
+    ax.plot(u, v)
+
+
 if __name__ == '__main__':
-    # plot_basis()
-    plot_sh(np.random.rand(9))
+    plot_basis()
+    s = eval_sh(0, 0, 1)
+    print(f'SH delta {s}')
+    plot_sh(s)
+    plot_sh(conv_zonal(s, cos_lob_zonal()))
+    plot_sh(window(s, 2.6))
+    plot_zonal(s, 0.0, PI)
     plt.show()
