@@ -1,1 +1,1 @@
-Some numeric experiments with sperical Harmonics
+Some numeric experiments with sperical harmonics
