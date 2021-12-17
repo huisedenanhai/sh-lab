@@ -95,8 +95,7 @@ def sample_basis(resolution):
     return x, y, z, eval_sh(x, y, z)
 
 
-def set_up_axis(ax):
-    r = 0.5
+def set_up_axis(ax, r=0.5):
     ax.set(
         xlim=[-r, r],
         ylim=[-r, r],
@@ -118,7 +117,7 @@ def value_colors(l):
 
 
 # need to hold reference to slider widgets
-sliders = []
+g_sliders = []
 
 
 def plot_basis():
@@ -142,15 +141,17 @@ def plot_basis():
         visualize(sh[i + 4], i + 11)
 
 
-def plot_sh(factor, rotate=False):
+def plot_sh(factor, rotate=False, fixed_range=None):
     x, y, z, sh = sample_basis(30)
     fig = plt.figure()
     main_rect = [0.0, 0.2, 1.0, 0.8] if rotate else [0, 0, 1, 1]
     ax = fig.add_axes(main_rect, projection='3d')
 
     def update_factors(f):
-        print(f)
         ax.clear()
+        if fixed_range != None:
+            set_up_axis(ax, fixed_range)
+
         l = np.tensordot(f, sh, axes=([0], [0]))
         v = np.abs(l)
         col = value_colors(l)
@@ -159,41 +160,32 @@ def plot_sh(factor, rotate=False):
     update_factors(factor)
 
     if rotate:
-        rz0_ax, rx_ax, rz1_ax = [
-            fig.add_axes([0.15, b, 0.75, 0.03]) for b in [0.15, 0.1, 0.05]
+        axes = [fig.add_axes([0.15, b, 0.75, 0.03]) for b in [0.15, 0.1, 0.05]]
+        rot = [0, 0, 0]
+        valmaxes = [2.0 * PI, PI, 2.0 * PI]
+        labels = ['Rotate Z0', 'Rotate X', 'Rotate Z1']
+        sliders = [
+            Slider(
+                ax=axes[i],
+                label=labels[i],
+                valmin=0,
+                valmax=valmaxes[i],
+                valinit=rot[i],
+            ) for i in range(3)
         ]
-        rz0, rx, rz1 = 0, 0, 0
-        slider_rz0 = Slider(
-            ax=rz0_ax,
-            label='Rotate Z0',
-            valmin=0,
-            valmax=2.0 * PI,
-            valinit=rz0,
-        )
-        slider_rx = Slider(
-            ax=rx_ax,
-            label='Rotate X',
-            valmin=0,
-            valmax=PI,
-            valinit=rx,
-        )
-        slider_rz1 = Slider(
-            ax=rz1_ax,
-            label='Rotate Z1',
-            valmin=0,
-            valmax=2.0 * PI,
-            valinit=rz1,
-        )
 
-        def update(val):
-            m = mat_rot_zxz(val, rx, rz1)
-            update_factors(rotate_sh(m, factor))
+        def update_func(i):
+            def update(val):
+                rot[i] = val
+                m = mat_rot_zxz(*rot)
+                update_factors(rotate_sh(m, factor))
+            return update
 
-        slider_rz0.on_changed(update)
-        slider_rx.on_changed(update)
-        slider_rz1.on_changed(update)
-        global sliders
-        sliders += [slider_rz0, slider_rx, slider_rz1]
+        for i in range(3):
+            sliders[i].on_changed(update_func(i))
+
+        global g_sliders
+        g_sliders += sliders
 
 
 def zonal_to_full(z):
@@ -287,6 +279,6 @@ def plot_delta():
 if __name__ == '__main__':
     plot_basis()
     plot_delta()
-    s = np.random.rand(9)
-    plot_sh(s, True)
+    s = np.concatenate((np.random.rand(4), np.zeros(5)))
+    plot_sh(s, True, 0.5)
     plt.show()
