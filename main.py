@@ -2,6 +2,7 @@ import math
 from matplotlib import cm
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider
 
 SQRT_PI = math.sqrt(math.pi)
 PI = math.pi
@@ -42,6 +43,48 @@ def eval_sh(x, y, z):
     ))
 
 
+def mat_rot_z(rz):
+    s, c = math.sin(rz), math.cos(rz)
+    return np.array([
+        [c, s, 0],
+        [-s, c, 0],
+        [0, 0, 1],
+    ])
+
+
+def mat_rot_x(rx):
+    s, c = math.sin(rx), math.cos(rx)
+    return np.array([
+        [1, 0, 0],
+        [0,  c, s],
+        [0, -s, c],
+    ])
+
+
+def mat_rot_zxz(rz0, rx, rz1):
+    return mat_rot_z(rz1) @ mat_rot_x(rx) @ mat_rot_z(rz0)
+
+
+def rotate_l1(m, l1):
+    # -f3 * x - f1 * y + f2 * z
+    # dot([-f3, -f1, f2], [x, y, z])
+    f1, f2, f3 = l1
+    m_f3, m_f1, f2 = np.array([-f3, -f1, f2]) @ m
+    return np.array([-m_f1, f2, -m_f3])
+
+
+def rotate_l2(m, l2):
+    return l2
+
+
+def rotate_sh(m, l):
+    return np.array([
+        l[0],
+        *rotate_l1(m, l[1:4]),
+        *rotate_l2(m, l[4:9]),
+    ])
+
+
 def sample_basis(resolution):
     u = np.linspace(0, 2 * np.pi, resolution)
     v = np.linspace(0, np.pi, resolution)
@@ -74,6 +117,10 @@ def value_colors(l):
     return cm.Reds(p) * mask(p) + cm.Blues(np.sign(n)) * mask(n)
 
 
+# need to hold reference to slider widgets
+sliders = []
+
+
 def plot_basis():
     x, y, z, sh = sample_basis(30)
 
@@ -95,14 +142,58 @@ def plot_basis():
         visualize(sh[i + 4], i + 11)
 
 
-def plot_sh(factor):
-    x, y, z, sh = sample_basis(100)
-    l = np.tensordot(factor, sh, axes=([0], [0]))
-    v = np.abs(l)
-    col = value_colors(l)
+def plot_sh(factor, rotate=False):
+    x, y, z, sh = sample_basis(30)
     fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1, projection='3d')
-    ax.plot_surface(x * v, y * v, z * v, facecolors=col)
+    main_rect = [0.0, 0.2, 1.0, 0.8] if rotate else [0, 0, 1, 1]
+    ax = fig.add_axes(main_rect, projection='3d')
+
+    def update_factors(f):
+        print(f)
+        ax.clear()
+        l = np.tensordot(f, sh, axes=([0], [0]))
+        v = np.abs(l)
+        col = value_colors(l)
+        ax.plot_surface(x * v, y * v, z * v, facecolors=col)
+
+    update_factors(factor)
+
+    if rotate:
+        rz0_ax, rx_ax, rz1_ax = [
+            fig.add_axes([0.15, b, 0.75, 0.03]) for b in [0.15, 0.1, 0.05]
+        ]
+        rz0, rx, rz1 = 0, 0, 0
+        slider_rz0 = Slider(
+            ax=rz0_ax,
+            label='Rotate Z0',
+            valmin=0,
+            valmax=2.0 * PI,
+            valinit=rz0,
+        )
+        slider_rx = Slider(
+            ax=rx_ax,
+            label='Rotate X',
+            valmin=0,
+            valmax=PI,
+            valinit=rx,
+        )
+        slider_rz1 = Slider(
+            ax=rz1_ax,
+            label='Rotate Z1',
+            valmin=0,
+            valmax=2.0 * PI,
+            valinit=rz1,
+        )
+
+        def update(val):
+            m = mat_rot_zxz(val, rx, rz1)
+            update_factors(rotate_sh(m, factor))
+
+        slider_rz0.on_changed(update)
+        slider_rx.on_changed(update)
+        slider_rz1.on_changed(update)
+        global sliders
+        sliders += [slider_rz0, slider_rx, slider_rz1]
 
 
 def zonal_to_full(z):
@@ -185,11 +276,17 @@ def print_window_weight_table():
         print(', '.join(ws))
 
 
-if __name__ == '__main__':
-    # plot_basis()
+def plot_delta():
     s = eval_sh(0.0, 0, 1)
     s_conv = conv_zonal(s, cos_lob_zonal())
     s_conv_windowed = window(s_conv, 5)
     plot_sh(s_conv_windowed)
     plot_2d_zonal([s_conv, s_conv_windowed], 0.0, PI)
+
+
+if __name__ == '__main__':
+    plot_basis()
+    plot_delta()
+    s = np.random.rand(9)
+    plot_sh(s, True)
     plt.show()
