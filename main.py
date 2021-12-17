@@ -77,6 +77,8 @@ def rotate_l2(m, l2):
     return l2
 
 
+# Calculate the projected factors for l(m * x).
+# To rotate the function it self with matrix m, one should calculate the projected factors for l(m.T * x)
 def rotate_sh(m, l):
     return np.array([
         l[0],
@@ -177,7 +179,7 @@ def plot_sh(factor, rotate=False, fixed_range=None):
         def update_func(i):
             def update(val):
                 rot[i] = val
-                m = mat_rot_zxz(*rot)
+                m = mat_rot_zxz(*rot).T
                 update_factors(rotate_sh(m, factor))
             return update
 
@@ -243,7 +245,6 @@ def window(v, w):
         for l in range(0, 3)
         for _ in range(-l, l + 1)
     ])
-    print(scale)
     return scale * v
 
 
