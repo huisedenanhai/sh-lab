@@ -268,11 +268,13 @@ def sinc_attenuated(l, w):
     f = math.sin(x) / x
 
     # The factor is actually differ from that provided in the paper 'Deringing spherical harmonics', Peter-Pike Sloan.
-    # The attenuation here is slightly stronger, which may result in more blurry result.
-    # But I guess there should be no significant visual difference.
+    # The attenuation here is slightly stronger.
+    # It DOES make significant difference when deringing cos convolved delta function.
+    # When the attenuation is applied, the result is much sharper, though light leaking accurs on the unlitted backside,
+    # which matches the teaser image of the paper.
     # The paper does not tell precisely how the attenuation is calculated, I have to guess.
     # The paper says he uses sinc^4 but the factor in the table matches with sinc for unattenuated levels.
-    # It might be a waste of time to figure out the exact implmentation used by the author.
+    # It might be a waste of time to figure out the exact implmentation used by the author :(
     # Filament also implements this. https://github.com/google/filament/blob/main/libs/ibl/src/CubemapSH.cpp
     # They use sinc^4 rather than the LUT provided by the paper.
     # For current attenuation factor, cutoff band 5 already makes cos convolved delta function non-negative.
