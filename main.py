@@ -354,30 +354,60 @@ def rotate_primary_linear_dir_to_z(s):
     return sz
 
 
-def quadratic_min(s0, s2, s4, s6, s8):
+def estimate_lower_bound(s):
+    s = rotate_primary_linear_dir_to_z(s)
     # zonal part
-    f_5_4_s6 = math.sqrt(5.0) / (4.0 * SQRT_PI) * s6
+    f_5_4_s6 = math.sqrt(5.0) / (4.0 * SQRT_PI) * s[6]
     a = f_5_4_s6 * 3.0
-    b = math.sqrt(3.0) / (2.0 * SQRT_PI) * s2
-    c = s0 / (2.0 * SQRT_PI) - f_5_4_s6
+    b = math.sqrt(3.0) / (2.0 * SQRT_PI) * s[2]
+    c = s[0] / (2.0 * SQRT_PI) - f_5_4_s6
 
     # l = 2, m = 2
-    q = math.sqrt(s4 * s4 + s8 * s8)
-    d = math.sqrt(15) * q / (4.0 * SQRT_PI)
-    a = a + d
-    c = c - d
+    q2 = math.sqrt(s[4] * s[4] + s[8] * s[8])
+    d2 = math.sqrt(15) * q2 / (4.0 * SQRT_PI)
+    a = a + d2
+    c = c - d2
 
+    z_min = min(a - b + c, a + b + c)
     if a > 0:
         z0 = -b / (2.0 * a)
         if z0 >= -1 and z0 <= 1:
-            return a * z0 * z0 + b * z0 + c
+            z_min = a * z0 * z0 + b * z0 + c
 
-    return min(a - b + c, a + b + c)
+    # l = 2, m = 1
+    q1 = math.sqrt(s[5] * s[5] + s[7] * s[7])
+    d1 = math.sqrt(15) * q1 / (2.0 * SQRT_PI)
+    z_min = z_min - d1 * 0.5
 
+    # alreay positive, do early return
+    if z_min >= 0:
+        return z_min
 
-def estimate_lower_bound(s):
-    s = rotate_primary_linear_dir_to_z(s)
-    z_min = quadratic_min(s[0], s[2], s[4], s[6], s[8])
+    # following the paper 'Deringing spherical harmonics', we can solve for a tighter bound when z_min might goes negative
+    def func(x):
+        return a * x * x + b * x + c + d1 * x * math.sqrt(max(0.0, 1 - x * x))
+
+    def func_d(x):
+        z = math.sqrt(max(0.0, 1 - x * x))
+        return 2.0 * a * x + b + d1 * z - d1 * x * x / z
+
+    def func_dd(x):
+        z = math.sqrt(max(0.0, 1 - x * x))
+        return 2.0 * a - d1 * x / z - d1 * (2 * x * z * z + x * x * x) / (z * z * z)
+
+    def inc(x):
+        return -func_d(x) / func_dd(x)
+
+    z = -1.0 / math.sqrt(2.0)
+    dz = 10000
+    while abs(z) <= 1 and abs(dz) > 1e-5:
+        z_min = func(z)
+        dz = inc(z)
+        z = z + dz
+
+    if abs(z) > 1:
+        z_min = min(func(-1), func(1))
+
     return z_min
 
 
@@ -395,7 +425,5 @@ if __name__ == '__main__':
     plot_sh(rotate_primary_linear_dir_to_z(s), True, 0.5)
     lower_bound = estimate_lower_bound(s)
     sr = rotate_primary_linear_dir_to_z(s)
-    sr[5] = 0
-    sr[7] = 0
     plot_2d_zonal([sr, const_lob(lower_bound)], 0.0, PI)
     plt.show()
