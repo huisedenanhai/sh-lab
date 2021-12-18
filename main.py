@@ -273,7 +273,8 @@ def sinc_attenuated(l, w):
     # The paper does not tell precisely how the attenuation is calculated, I have to guess.
     # The paper says he uses sinc^4 but the factor in the table matches with sinc for unattenuated levels.
     # It might be a waste of time to figure out the exact implmentation used by the author.
-    # Filament also implements this. They use sinc^4 rather than the LUT provided by the paper.
+    # Filament also implements this. https://github.com/google/filament/blob/main/libs/ibl/src/CubemapSH.cpp
+    # They use sinc^4 rather than the LUT provided by the paper.
     # For current attenuation factor, cutoff band 5 already makes cos convolved delta function non-negative.
     if l == 1:
         a = 1.0 - min(max(0.0, (11.0 - w) * 0.015), 0.1)
