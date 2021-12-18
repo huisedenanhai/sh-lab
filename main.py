@@ -74,7 +74,37 @@ def rotate_l1(m, l1):
 
 
 def rotate_l2(m, l2):
-    return l2
+    # similar to http://filmicworlds.com/blog/simple-and-fast-spherical-harmonic-rotation/
+    # for any direction d, we have
+    # l2' * sh(d) = l2 * sh(m * d)
+    # To solve l2', just pick some given directions d and solve the linear system
+    # We choose the same basic directions as those presented in that blog, and let
+    # A = sh(*ns)
+    # B = sh(*(m * d))
+    # Then
+    # l2' = l2 * B * A^-1
+    # A^-1 can be precomputed and sparse
+    k = 1.0 / math.sqrt(2.0)
+    ns = np.array([
+        [1, 0, 0],
+        [0, 0, 1],
+        [k, k, 0],
+        [k, 0, k],
+        [0, k, k],
+    ]).T
+    # A = sh_l2(*ns)
+    k0 = 0.915291233
+    k1 = 1.83058247
+    k2 = 1.58533092
+    inv_A = np.array([
+        [0, -k0, 0, k0, k1],
+        [k0, 0, k2, k0, k0],
+        [k1, 0, 0, 0, 0],
+        [0, 0, 0, -k1, 0],
+        [0, -k1, 0, 0, 0]
+    ])
+    B = sh_l2(*(m @ ns))
+    return l2 @ B @ inv_A
 
 
 # Calculate the projected factors for l(m * x).
@@ -280,6 +310,7 @@ def plot_delta():
 if __name__ == '__main__':
     plot_basis()
     plot_delta()
-    s = np.concatenate((np.random.rand(4), np.zeros(5)))
+    # s = np.concatenate((np.random.rand(4), np.zeros(5)))
+    s = np.random.rand(9)
     plot_sh(s, True, 0.5)
     plt.show()
