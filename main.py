@@ -226,6 +226,10 @@ def zonal_to_full(z):
     return f
 
 
+def full_to_zonal(s):
+    return np.array([s[0], s[2], s[6]])
+
+
 def cos_lob_zonal():
     return np.array([
         SQRT_PI / 2.0,
@@ -234,8 +238,16 @@ def cos_lob_zonal():
     ])
 
 
+def const_lob_zonal(c):
+    return np.array([c * 2.0 * SQRT_PI, 0.0, 0.0])
+
+
 def cos_lob():
     return zonal_to_full(cos_lob_zonal())
+
+
+def const_lob(c):
+    return zonal_to_full(const_lob_zonal(c))
 
 
 def conv_zonal(v, z):
@@ -280,16 +292,31 @@ def window(v, w):
 
 def plot_2d_zonal(ss, phi_min, phi_max):
     fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    u = np.linspace(phi_min, phi_max, 100)
-    x = np.sin(u)
-    z = np.cos(u)
-    y = np.zeros(u.size)
-    b = eval_sh(x, y, z)
-    ax.grid()
-    for s in ss:
-        v = np.tensordot(s, b, axes=([0], [0]))
-        ax.plot(u, v)
+    ax = fig.add_axes([0.1, 0.15, 0.8, 0.8])
+
+    def update(theta):
+        ax.clear()
+        u = np.linspace(phi_min, phi_max, 100)
+        x = np.sin(u) * np.cos(theta)
+        y = np.sin(u) * np.sin(theta)
+        z = np.cos(u)
+        b = eval_sh(x, y, z)
+        ax.grid()
+        for s in ss:
+            v = np.tensordot(s, b, axes=([0], [0]))
+            ax.plot(u, v)
+
+    update(0)
+
+    slider = Slider(
+        ax=fig.add_axes([0.1, 0.05, 0.8, 0.03]),
+        label='Theta',
+        valmin=0,
+        valmax=2.0 * PI,
+        valinit=0.0,
+    )
+    slider.on_changed(update)
+    g_sliders.append(slider)
 
 
 def print_window_weight_table():
@@ -307,10 +334,68 @@ def plot_delta():
     plot_2d_zonal([s_conv, s_conv_windowed], 0.0, PI)
 
 
+def safe_normalize(v, v0):
+    n = np.linalg.norm(v)
+    if n == 0:
+        return v0
+    return v / n
+
+
+def rotate_primary_linear_dir_to_z(s):
+    z = np.array([-s[3], -s[1], s[2]])
+    z = safe_normalize(z, np.array([0, 0, 1]))
+    x = np.cross(z, np.array([0, 0, 1]))
+    x = safe_normalize(x, np.array([1, 0, 0]))
+    y = safe_normalize(np.cross(z, x), np.array([0, 1, 0]))
+
+    # rotate the primary linear direction to z
+    sz = rotate_sh(np.array([x, y, z]).T, s)
+
+    return sz
+
+
+def quadratic_min(s0, s2, s4, s6, s8):
+    # zonal part
+    f_5_4_s6 = math.sqrt(5.0) / (4.0 * SQRT_PI) * s6
+    a = f_5_4_s6 * 3.0
+    b = math.sqrt(3.0) / (2.0 * SQRT_PI) * s2
+    c = s0 / (2.0 * SQRT_PI) - f_5_4_s6
+
+    # l = 2, m = 2
+    q = math.sqrt(s4 * s4 + s8 * s8)
+    d = math.sqrt(15) * q / (4.0 * SQRT_PI)
+    a = a + d
+    c = c - d
+
+    if a > 0:
+        z0 = -b / (2.0 * a)
+        if z0 >= -1 and z0 <= 1:
+            return a * z0 * z0 + b * z0 + c
+
+    return min(a - b + c, a + b + c)
+
+
+def estimate_lower_bound(s):
+    s = rotate_primary_linear_dir_to_z(s)
+    z_min = quadratic_min(s[0], s[2], s[4], s[6], s[8])
+    return z_min
+
+
+def deringing(s):
+    return s
+
+
 if __name__ == '__main__':
     plot_basis()
     plot_delta()
     # s = np.concatenate((np.random.rand(4), np.zeros(5)))
     s = np.random.rand(9)
     plot_sh(s, True, 0.5)
+    # plot_sh(deringing(s), True, 0.5)
+    plot_sh(rotate_primary_linear_dir_to_z(s), True, 0.5)
+    lower_bound = estimate_lower_bound(s)
+    sr = rotate_primary_linear_dir_to_z(s)
+    sr[5] = 0
+    sr[7] = 0
+    plot_2d_zonal([sr, const_lob(lower_bound)], 0.0, PI)
     plt.show()
