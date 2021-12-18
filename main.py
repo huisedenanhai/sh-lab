@@ -290,7 +290,7 @@ def window(v, w):
     return scale * v
 
 
-def plot_2d_zonal(ss, phi_min, phi_max):
+def plot_2d_sh(ss, phi_min, phi_max):
     fig = plt.figure()
     ax = fig.add_axes([0.1, 0.15, 0.8, 0.8])
 
@@ -331,7 +331,7 @@ def plot_delta():
     s_conv = conv_zonal(s, cos_lob_zonal())
     s_conv_windowed = window(s_conv, 5)
     plot_sh(s_conv_windowed)
-    plot_2d_zonal([s_conv, s_conv_windowed], 0.0, PI)
+    plot_2d_sh([s_conv, s_conv_windowed], 0.0, PI)
 
 
 def safe_normalize(v, v0):
@@ -411,19 +411,49 @@ def estimate_lower_bound(s):
     return z_min
 
 
+def find_window(s, w_min, w_max):
+    for _ in range(16):
+        if w_max - w_min <= 1e-4:
+            break
+        w = (w_min + w_max) / 2.0
+        lower_bound = estimate_lower_bound(window(s, w))
+        if lower_bound < 0:
+            w_max = w
+        else:
+            w_min = w
+
+    return w_min
+
+
 def deringing(s):
-    return s
+    w = find_window(s, 1, 16)
+    print(f'Window {w}')
+    return window(s, w)
+
+
+def test_lower_bound():
+    s = np.random.rand(9)
+    lower_bound = estimate_lower_bound(s)
+    plot_2d_sh([s, const_lob(lower_bound)], 0.0, PI)
+
+
+def test_rotate():
+    s = np.random.rand(9)
+    plot_sh(s, True, 0.5)
+    plot_sh(rotate_primary_linear_dir_to_z(s), True, 0.5)
+
+
+def test_deringing():
+    s = np.random.rand(9)
+    plot_sh(deringing(s))
+    plot_sh(deringing(conv_zonal(eval_sh(0, 0, 1), cos_lob_zonal())))
 
 
 if __name__ == '__main__':
     plot_basis()
     plot_delta()
-    # s = np.concatenate((np.random.rand(4), np.zeros(5)))
-    s = np.random.rand(9)
-    plot_sh(s, True, 0.5)
-    # plot_sh(deringing(s), True, 0.5)
-    plot_sh(rotate_primary_linear_dir_to_z(s), True, 0.5)
-    lower_bound = estimate_lower_bound(s)
-    sr = rotate_primary_linear_dir_to_z(s)
-    plot_2d_zonal([sr, const_lob(lower_bound)], 0.0, PI)
+    test_lower_bound()
+    test_rotate()
+    test_deringing()
+
     plt.show()
